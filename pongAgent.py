@@ -1,9 +1,10 @@
+import pygame
 import torch
 import random
 import numpy as np
 from collections import deque
 from pongAI import PongGameAI
-from model import Linear_QNet, QTrainer
+from model import Linear_QNet, CNN_QNet, QTrainer, CNN_QTrainer
 
 
 MAX_MEMORY = 100_000
@@ -20,13 +21,13 @@ class Agent:
         self.L_memory = deque(maxlen = MAX_MEMORY) # once it gets full it removes early events
         self.R_memory = deque(maxlen = MAX_MEMORY) # once it gets full it removes early events
         self.modelp1 = Linear_QNet(8, 256, 3)
-        self.modelp2 = Linear_QNet(8, 256, 3)
+        self.modelp2 = CNN_QNet(1)
         self.L_trainer = QTrainer(self.modelp1, lr = LR, gamma = self.gamma)
-        self.R_trainer = QTrainer(self.modelp2, lr = LR, gamma = self.gamma)
+        self.R_trainer = CNN_QTrainer(self.modelp2, lr = LR, gamma = self.gamma)
 
     def get_state(self, game):
 
-        ball_x = game.ball_pos[0]
+        #ball_x = game.ball_pos[0]
         ball_y = game.ball_pos[1]
         ball_x_vel = game.ball_vel[0]
         ball_y_vel = game.ball_vel[1]
@@ -106,7 +107,7 @@ class Agent:
             P2D = 0
 
         L_state = np.array([BAP1, BBP1, BTP1, BVU, BVD, P2P1, P2U, P2D], dtype= int)
-        R_state = np.array([BAP2, BBP2, BTP2, BVU, BVD, P2P2, P1U, P1D], dtype= int)
+        R_state = pygame.surfarray.pixels2d(game.display).astype(np.float32)
 
         return L_state, R_state
         
@@ -177,11 +178,16 @@ def train():
 
         Left_Move, Right_Move = agent.get_action(state_L, state_R)
 
+        print(state_R)
+        print(state_R.shape)
+
         L_reward, R_reward, game_over, winner, l_score, r_score = game.play_step(Left_Move, Right_Move)
         state_L_New, state_R_New = agent.get_state(game)
 
-        total_L_Reward += L_reward
-        total_R_reward += R_reward
+        print(state_R_New)
+        state_R_New = torch.tensor(state_R_New, dtype = torch.float).unsqueeze(0).unsqueeze(0)
+        print(state_R_New)
+
         winner_hist.append(winner)
 
         # train short memory
@@ -205,11 +211,7 @@ def train():
                 agent.modelp2.save(file_name= "Right_Paddle.pth")  
 
             # TODO impliment a score / winner tracker
-            print(f'Left paddle total reward {total_L_Reward} \n Right paddle total reward {total_R_reward} \n Games won Left {sum(np.array(winner_hist)=="LEFT")} \n Games won right {sum(np.array(winner_hist)=="RIGHT")} \nScore Left {l_score} \n Score Right {r_score}')         
-
-
-
-
+            print(f'Left paddle total reward {L_reward} \n Right paddle total reward {R_reward} \n Games won Left {sum(np.array(winner_hist)=="LEFT")} \n Games won right {sum(np.array(winner_hist)=="RIGHT")} \nScore Left {l_score} \n Score Right {r_score}')         
 
 if __name__ == '__main__':
     train()
